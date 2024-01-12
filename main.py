@@ -1,7 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import cv2
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel
+from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel,QMessageBox
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QObject, QTimer
 from yolov8 import YOLOv8  # Import your YOLOv8 class
 
@@ -10,6 +10,7 @@ class DetectionThread(QThread):
     character_signal = pyqtSignal(int)
     recognition_accuracy = pyqtSignal(float)
     next_character = pyqtSignal(int)
+    next_character_ready = pyqtSignal()
 
     def __init__(self, model_path, parent=None):
         super().__init__(parent)
@@ -30,6 +31,7 @@ class DetectionThread(QThread):
                 if len(class_ids) > 0:
                         if class_ids[0] not in self.lst_character:
                                 if class_ids[0] == self.count:
+                                        self.next_character_ready.emit()
                                         print("Before->",class_ids[0],self.count)
                                         self.lst_character.append(class_ids[0])
                                         self.character_signal.emit(class_ids[0])
@@ -39,6 +41,7 @@ class DetectionThread(QThread):
                                         self.next_character.emit(self.char)
                                         if self.count == 49:
                                                 self.count = 0
+                                                self.char = 1
                                                 self.lst_character = []
                                         print("After->",class_ids[0],self.count)
 
@@ -270,7 +273,8 @@ class Ui_Form(object):
         self.thread.change_pixmap_signal.connect(self.update_image)
         self.thread.character_signal.connect(self.update_character)
         self.thread.recognition_accuracy.connect(self.update_accuracy)
-        self.thread.next_character.connect(self.update_sample)
+        # self.thread.next_character.connect(self.update_sample)
+        self.thread.next_character.connect(self.show_next_character_prompt)
         self.thread.start()
         self.update_sample(1)
   
@@ -281,6 +285,24 @@ class Ui_Form(object):
         self.lbl_count.setText(f"{character+1}/49")
         self.lbl_char.setText(self.bengali_characters.get(character))
         # self.update_sample(int(character+1))
+
+
+    def show_next_character_prompt(self):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setText("Move to the next sample?")
+        msg_box.setWindowTitle("Confirmation")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setDefaultButton(QMessageBox.No)
+        
+        reply = msg_box.exec_()
+        if reply == QMessageBox.Yes:
+            self.update_sample(self.thread.char)
+        else:
+            self.thread.lst_character.pop()
+            self.thread.char-=1
+            self.thread.count-=1
+            
 
     def update_sample(self,val):
         print(f"Show {val}.png")
